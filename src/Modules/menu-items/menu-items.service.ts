@@ -86,6 +86,15 @@ export class MenuItemsService {
   */
 
   async getMenuItems() {
-    throw new Error('TODO in task 3');
+    let menuPromise = this.menuItemRepository.createQueryBuilder("menu_item")
+        .leftJoinAndSelect('menu_item', 'children')
+        .where("menu_item.parentId IS NULL")
+        .getMany()
+        
+    return Promise.all([menuPromise]).then((values) => {
+        console.log(values[0])
+    })
+    
   }
 }
+

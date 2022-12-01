@@ -1,13 +1,19 @@
-import { Repository } from 'typeorm';
+import { Repository, MoreThan } from 'typeorm';
 import { Event } from './entities/event.entity';
+import { Workshop } from './entities/workshop.entity'
 import App from "../../app";
+import { format } from 'date-fns'
+import { json } from 'express';
 
+export const MoreThanDate = (date: Date) => MoreThan(format(date, 'YYYY-MM-DD HH:MM:SS'))
 
 export class EventsService {
   private eventRepository: Repository<Event>;
-
+  private workshopRepository: Repository<Workshop>;
+  
   constructor(app: App) {
     this.eventRepository = app.getDataSource().getRepository(Event);
+    this.workshopRepository = app.getDataSource().getRepository(Workshop);
   }
 
   async getWarmupEvents() {
@@ -92,7 +98,32 @@ export class EventsService {
      */
 
   async getEventsWithWorkshops() {
-    throw new Error('TODO task 1');
+    let jsonEvents: { id: number; name: string; createdAt: string; workshops: Workshop[]; }[] = []
+    
+    let eventsPromise = this.eventRepository.createQueryBuilder("event")
+      .getMany();
+
+    let workshopsPromise = this.workshopRepository.createQueryBuilder("workshop")
+      .getMany();
+
+    return Promise.all([eventsPromise, workshopsPromise]).then((values) => {
+      let raw_events = values[0]
+      let raw_workshops = values[1]
+      
+      raw_events.forEach(event => {
+        let items = raw_workshops.filter(o => o.eventId === event.id);
+
+        let obj = {
+          id: event.id,
+          name: event.name,
+          createdAt: event.createdAt,
+          workshops: items
+        };
+
+        jsonEvents.push(obj)
+      })
+      return jsonEvents
+    });
   }
 
   /* TODO: complete getFutureEventWithWorkshops so that it returns events with workshops, that have not yet started
@@ -162,6 +193,41 @@ export class EventsService {
     ```
      */
   async getFutureEventWithWorkshops() {
-    throw new Error('TODO task 2');
+    let jsonEvents: { id: number; name: string; createdAt: string; workshops: Workshop[]; }[] = []
+
+    let eventsPromise = this.eventRepository.createQueryBuilder("event")
+      .getMany();
+    
+    const currentUtcTimeAsSqliteString = new Date().toISOString().replace('T', ' ');
+
+    let workshopsPromise = this.workshopRepository.createQueryBuilder("workshop")
+      .where('workshop.start > :now',
+        {
+          now: currentUtcTimeAsSqliteString,
+        }
+      ).getMany();
+
+      return Promise.all([eventsPromise, workshopsPromise]).then((values) => {
+        let raw_events = values[0]
+        let raw_workshops = values[1]
+        
+        raw_events.forEach(event => {
+          let items = raw_workshops.filter(o => o.eventId === event.id);
+  
+          if (items.length > 0) {
+            let obj = {
+              id: event.id,
+              name: event.name,
+              createdAt: event.createdAt,
+              workshops: items
+            };
+    
+            jsonEvents.push(obj)
+          } 
+        });
+
+        return jsonEvents
+      });
   }
 }
+
